@@ -1,7 +1,7 @@
 name: "Java: Spring Framework"
 
-# Spring Framework's own pull request build, `./gradlew check antora`, at a fixed commit, on both runners. Its build
-# action sets up Java 25 and Gradle, whose cache is GitHub's.
+# Spring Framework's own pull request build, `./gradlew check antora`, at a fixed commit, on both runners, built from
+# scratch: the Java its build action sets up, and no cache of any kind, GitHub's or Gradle's.
 on:
   pull_request:
   workflow_dispatch:
@@ -37,8 +37,17 @@ jobs:
           ref: 07c005fc2c004a99c790b59d2e4236ae6027c3ef
           persist-credentials: false
 
+      - name: Set up Java
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: liberica
+          java-version: 25
+
+      # Spring's build action also sets up Gradle with GitHub's cache; its build reads Spring's remote build cache too.
       - name: Build
-        uses: ./.github/actions/build
+        run: ./gradlew check antora --no-build-cache
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.internal.launcher.welcomeMessageEnabled=false
 
   compare:
     name: Compare
