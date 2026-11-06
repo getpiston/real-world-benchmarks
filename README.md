@@ -2,7 +2,7 @@
 
 Well-known open-source projects, built with their own CI steps, on a GitHub-hosted runner and on [Piston](https://piston.sh) at the same time.
 
-Each pull request here runs one project at a fixed commit, in parallel on `ubuntu-latest` and on `piston-2cpu-ubuntu-2402`, and Bevy and VS Code on `piston-4cpu-ubuntu-2402` too. Every job runs the same steps and uses GitHub's cache. When they finish, the run's summary shows how long each took.
+Each pull request here runs one project at a fixed commit, in parallel on `ubuntu-latest` and on `piston-2cpu-ubuntu-2402`, and Bevy and VS Code on `piston-4cpu-ubuntu-2402` too. Every job runs the same steps. Spring Framework and VS Code use GitHub's cache; Bevy builds from scratch every time. When they finish, the run's summary shows how long each took.
 
 | Language | Project | What runs |
 |---|---|---|
@@ -14,7 +14,7 @@ Each pull request here runs one project at a fixed commit, in parallel on `ubunt
 
 Open a pull request's checks, then the run's **Summary**. The table there has each runner's CPUs, its whole job, its build step and its cache steps. Under it, each Piston size's time is compared with `ubuntu-latest`'s.
 
-The first run of a workflow fills each runner's cache. Later runs read it, as everyday CI does. To measure again, open **Actions**, pick the workflow and click **Run workflow**.
+For Spring Framework and VS Code, the first run of a workflow fills each runner's cache, and later runs read it, as everyday CI does. To measure again, open **Actions**, pick the workflow and click **Run workflow**.
 
 ## Keeping it fair
 
