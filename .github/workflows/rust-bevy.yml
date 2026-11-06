@@ -1,6 +1,6 @@
 name: "Rust: Bevy"
 
-# Bevy's own Linux CI job, `cargo run -p ci -- test`, at a fixed commit, on both runners.
+# Bevy's own Linux CI job, `cargo run -p ci -- test`, at a fixed commit, on each runner, built from scratch with no cache.
 on:
   pull_request:
   workflow_dispatch:
@@ -43,18 +43,6 @@ jobs:
           repository: bevyengine/bevy
           ref: 159fa8d8e5e11ba0d40f55e39986992520635f4f
           persist-credentials: false
-
-      - name: Restore the cargo cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: bevy-${{ matrix.runner }}-${{ hashFiles('**/Cargo.toml') }}
-          restore-keys: bevy-${{ matrix.runner }}-
 
       # Bevy's build needs more disk than the image leaves free. Both runners boot GitHub's image, so both drop the same SDKs.
       - name: Free disk space
