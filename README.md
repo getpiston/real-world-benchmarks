@@ -2,7 +2,7 @@
 
 Well-known open-source projects, built with their own CI steps, on a GitHub-hosted runner and on [Piston](https://piston.sh) at the same time.
 
-Each pull request here runs one project at a fixed commit, twice in parallel: once on `ubuntu-latest` and once on `piston-4cpu-ubuntu-2402`. Both jobs run the same steps and use GitHub's cache. When both finish, the run's summary shows how long each took.
+Each pull request here runs one project at a fixed commit, three times in parallel: on `ubuntu-latest`, on `piston-2cpu-ubuntu-2402` and on `piston-4cpu-ubuntu-2402`. All three jobs run the same steps and use GitHub's cache. When they finish, the run's summary shows how long each took.
 
 | Language | Project | What runs |
 |---|---|---|
@@ -12,14 +12,14 @@ Each pull request here runs one project at a fixed commit, twice in parallel: on
 
 ## Reading a run
 
-Open a pull request's checks, then the run's **Summary**. The table there has each runner's whole job, its build step and its cache steps.
+Open a pull request's checks, then the run's **Summary**. The table there has each runner's CPUs, its whole job, its build step and its cache steps. Under it, each Piston size's time is compared with `ubuntu-latest`'s.
 
 The first run of a workflow fills each runner's cache. Later runs read it, as everyday CI does. To measure again, open **Actions**, pick the workflow and click **Run workflow**.
 
 ## Keeping it fair
 
-- In a public repository, GitHub's `ubuntu-latest` has 4 CPUs, the same as `piston-4cpu-ubuntu-2402`.
-- Both jobs check out the same upstream commit and run the same steps.
+- GitHub's `ubuntu-latest` has 2 CPUs in a private repository and 4 in a public one. One Piston size always has the same CPUs: `piston-2cpu-ubuntu-2402` while private, `piston-4cpu-ubuntu-2402` once public. The summary says which.
+- Every job checks out the same upstream commit and runs the same steps.
 - Each runner keeps its own cache, so neither reads what the other saved.
 
 ## The projects
