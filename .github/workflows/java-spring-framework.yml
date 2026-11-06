@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, piston-2cpu-ubuntu-2402]
+        runner: [ubuntu-latest, piston-4cpu-ubuntu-2402]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
