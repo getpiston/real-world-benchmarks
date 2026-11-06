@@ -17,7 +17,8 @@ jobs:
   upload:
     # Forks' pull requests never reach either runner.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    name: "Upload: ${{ matrix.runner }}"
+    # Both runners have 4 CPUs: ubuntu-latest in a public repository, and piston-4cpu.
+    name: "Upload: ${{ matrix.runner }} (4 CPUs)"
     strategy:
       fail-fast: false
       matrix:
@@ -47,7 +48,7 @@ jobs:
 
   download:
     needs: upload
-    name: "Download: ${{ matrix.runner }}"
+    name: "Download: ${{ matrix.runner }} (4 CPUs)"
     strategy:
       fail-fast: false
       matrix:
@@ -107,6 +108,7 @@ jobs:
           times = {}
           for job in json.load(open("jobs.json"))["jobs"]:
               stage, _, runner = job["name"].partition(": ")
+              runner = runner.partition(" (")[0]
               if stage not in ("Upload", "Download"):
                   continue
               step = next((step for step in job.get("steps", []) if step["name"] == f"{stage} the cache"), {})
