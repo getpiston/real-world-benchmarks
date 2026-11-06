@@ -2,7 +2,7 @@
 
 Well-known open-source projects, built with their own CI steps, on a GitHub-hosted runner and on [Piston](https://piston.sh) at the same time.
 
-Each pull request here runs one project at a fixed commit, three times in parallel: on `ubuntu-latest`, on `piston-2cpu-ubuntu-2402` and on `piston-4cpu-ubuntu-2402`. All three jobs run the same steps and use GitHub's cache. When they finish, the run's summary shows how long each took.
+Each pull request here runs one project at a fixed commit, in parallel on `ubuntu-latest` and on `piston-2cpu-ubuntu-2402`, and Bevy and VS Code on `piston-4cpu-ubuntu-2402` too. Every job runs the same steps and uses GitHub's cache. When they finish, the run's summary shows how long each took.
 
 | Language | Project | What runs |
 |---|---|---|
