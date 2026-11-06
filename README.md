@@ -2,7 +2,7 @@
 
 Well-known open-source projects, built with their own CI steps, on a GitHub-hosted runner and on [Piston](https://piston.sh) at the same time.
 
-Each pull request here runs one project at a fixed commit, in parallel on `ubuntu-latest` and on `piston-2cpu-ubuntu-2402`, and Bevy and VS Code on `piston-4cpu-ubuntu-2402` too. Every job runs the same steps. Spring Framework and VS Code use GitHub's cache; Bevy builds from scratch every time. When they finish, the run's summary shows how long each took.
+Each pull request here runs one project at a fixed commit, twice in parallel: on `ubuntu-latest` and on `piston-4cpu-ubuntu-2402`. Every job runs the same steps. Spring Framework and VS Code use GitHub's cache; Bevy builds from scratch every time. When both finish, the run's summary shows how long each took.
 
 | Language | Project | What runs |
 |---|---|---|
@@ -12,15 +12,15 @@ Each pull request here runs one project at a fixed commit, in parallel on `ubunt
 
 ## Reading a run
 
-Open a pull request's checks, then the run's **Summary**. The table there has each runner's CPUs, its whole job, its build step and its cache steps. Under it, each Piston size's time is compared with `ubuntu-latest`'s.
+Open a pull request's checks, then the run's **Summary**. The table there has each runner's CPUs, its whole job, its build step and its cache steps. Under it, Piston's time is compared with `ubuntu-latest`'s.
 
 For Spring Framework and VS Code, the first run of a workflow fills each runner's cache, and later runs read it, as everyday CI does. To measure again, open **Actions**, pick the workflow and click **Run workflow**.
 
 ## Keeping it fair
 
-- GitHub's `ubuntu-latest` has 2 CPUs in a private repository and 4 in a public one. One Piston size always has the same CPUs: `piston-2cpu-ubuntu-2402` while private, `piston-4cpu-ubuntu-2402` once public. The summary says which.
+- In a public repository like this one, GitHub's `ubuntu-latest` has 4 CPUs and 16 GB of memory. `piston-4cpu-ubuntu-2402` has the same 4 CPUs and 16 GiB.
 - Every job checks out the same upstream commit and runs the same steps.
-- Each runner keeps its own cache, so none reads what another saved.
+- Each runner keeps its own cache, so neither reads what the other saved.
 
 ## The projects
 
