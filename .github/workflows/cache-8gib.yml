@@ -3,6 +3,8 @@ name: "Cache: 8 GiB"
 # Each runner uploads 8 GiB to the Actions cache with actions/cache, then a fresh job on the same runner downloads it.
 on:
   pull_request:
+  push:
+    branches: [benchmark/cache-8gib]
   workflow_dispatch:
 
 permissions:
@@ -19,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+        runner: [ubuntu-latest, piston-4cpu-ubuntu-2402]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -49,7 +51,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+        runner: [ubuntu-latest, piston-4cpu-ubuntu-2402]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -121,7 +123,8 @@ jobs:
           for name in runners:
               if name == "ubuntu-latest":
                   continue
+              match = "the same CPUs" if cpus(name) == cpus("ubuntu-latest") else f"{cpus(name)} CPUs against {cpus('ubuntu-latest')}"
               for stage, verb in (("Upload", "uploaded"), ("Download", "downloaded")):
                   if hosted.get(stage) and times[name].get(stage):
-                      print(f"- `{name}` {verb} 8 GiB {hosted[stage] / times[name][stage]:.1f}× as fast as `ubuntu-latest` ({cpus(name)} CPUs against {cpus('ubuntu-latest')}).")
+                      print(f"- `{name}` {verb} 8 GiB {hosted[stage] / times[name][stage]:.1f}× as fast as `ubuntu-latest` ({match}).")
           PYTHON
