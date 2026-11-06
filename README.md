@@ -20,7 +20,7 @@ The first run of a workflow fills each runner's cache. Later runs read it, as ev
 
 - GitHub's `ubuntu-latest` has 2 CPUs in a private repository and 4 in a public one. One Piston size always has the same CPUs: `piston-2cpu-ubuntu-2402` while private, `piston-4cpu-ubuntu-2402` once public. The summary says which.
 - Every job checks out the same upstream commit and runs the same steps.
-- Each runner keeps its own cache, so neither reads what the other saved.
+- Each runner keeps its own cache, so none reads what another saved.
 
 ## The projects
 
