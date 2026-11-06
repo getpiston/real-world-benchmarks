@@ -21,6 +21,15 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
+      - name: Describe the runner
+        run: |
+          echo "CPUs: $(nproc)"
+          free -h | sed -n 2p
+          df -h / | sed -n 2p
+          echo "PATH: $PATH"
+          for tool in rustup cargo java node pnpm; do echo "$tool: $(command -v $tool || echo not on PATH)"; done
+          ls -d "$HOME/.cargo/bin" "$HOME/.rustup" /etc/skel/.cargo/bin 2>&1 || true
+
       - name: Check out Spring Framework
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -62,7 +71,8 @@ jobs:
           rows = []
           for job in jobs:
               build = next((step for step in job.get("steps", []) if step["name"] == "Build"), {})
-              cache = sum(seconds(step) or 0 for step in job.get("steps", []) if "cache" in step["name"].lower())
+              cache_steps = [step for step in job.get("steps", []) if "cache" in step["name"].lower()]
+              cache = sum(seconds(step) or 0 for step in cache_steps) if cache_steps else None
               rows.append((job["name"], job["conclusion"], seconds(job), seconds(build), cache))
 
           print("| Runner | Result | Whole job | Build step | Cache steps |")
@@ -71,6 +81,6 @@ jobs:
               print(f"| `{name}` | {conclusion} | {clock(whole)} | {clock(build)} | {clock(cache)} |")
           by_name = {row[0]: row for row in rows}
           hosted, piston = by_name.get("ubuntu-latest"), by_name.get("piston-4cpu-ubuntu-2402")
-          if hosted and piston and hosted[2] and piston[2]:
+          if hosted and piston and hosted[1] == piston[1] == "success":
               print(f"\nPiston finished the whole job {hosted[2] / piston[2]:.1f}× as fast as `ubuntu-latest`.")
           PYTHON
