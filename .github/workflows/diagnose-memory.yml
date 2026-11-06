@@ -50,8 +50,7 @@ jobs:
       - name: Write the memory filler
         run: |
           cat > "$RUNNER_TEMP/fill.py" <<'PYTHON'
-          # Holds RAM plus the given GiB, a GiB at a time with every page written, and logs what swap takes.
-          import sys
+          # Grows by 256 MiB, every page written, until the kernel stops it; logs each step.
           import time
 
           def meminfo():
@@ -62,29 +61,34 @@ jobs:
               return values
 
           gib = 1 << 30
+          step = 256 << 20
           info = meminfo()
-          target = info["MemTotal"] + int(sys.argv[1]) * gib
-          print(f"RAM {info['MemTotal'] / gib:.1f} GiB, swap {info['SwapTotal'] / gib:.1f} GiB, asking for {target / gib:.1f} GiB", flush=True)
+          print(f"RAM {info['MemTotal'] / gib:.2f} GiB, swap {info['SwapTotal'] / gib:.2f} GiB", flush=True)
           held = []
           start = time.time()
-          while len(held) * gib < target:
-              block = bytearray(gib)
-              block[::4096] = b"\x01" * (gib // 4096)
+          while True:
+              block = bytearray(step)
+              block[::4096] = b"\x01" * (step // 4096)
               held.append(block)
               now = meminfo()
               used_swap = (now["SwapTotal"] - now["SwapFree"]) / gib
-              print(f"{len(held):3d} GiB held at {time.time() - start:6.1f}s: available {now['MemAvailable'] / gib:5.2f} GiB, swap used {used_swap:5.2f} GiB", flush=True)
-          print(f"Held all {len(held)} GiB in {time.time() - start:.1f}s", flush=True)
+              print(f"held {len(held) * step / gib:6.2f} GiB at {time.time() - start:6.1f}s: available {now['MemAvailable'] / gib:5.2f} GiB, swap used {used_swap:5.2f} GiB", flush=True)
           PYTHON
 
-      - name: Fill memory to 3 GiB past RAM
+      - name: Grow one process until something gives
         continue-on-error: true
-        run: python3 "$RUNNER_TEMP/fill.py" 3
+        run: |
+          set +e
+          python3 "$RUNNER_TEMP/fill.py"
+          echo "The filler ended with exit code $?"
+          echo "--- the kernel's account"
+          sudo dmesg | grep -iE 'out of memory|oom-kill|killed process|oom_reaper' | tail -8
+          free -h
+          exit 0
 
-      - name: Fill memory to 6 GiB past RAM
-        continue-on-error: true
-        run: python3 "$RUNNER_TEMP/fill.py" 6
-
-      - name: What the kernel killed
+      - name: Did the runner survive
         if: always()
-        run: sudo dmesg | grep -iE 'out of memory|oom-kill|killed process' | tail -10 || echo "nothing"
+        run: |
+          echo "This step ran, so the runner survived."
+          uptime
+          free -h
