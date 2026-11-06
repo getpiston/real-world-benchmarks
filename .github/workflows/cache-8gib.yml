@@ -1,0 +1,127 @@
+name: "Cache: 8 GiB"
+
+# Each runner uploads 8 GiB to the Actions cache with actions/cache, then a fresh job on the same runner downloads it.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CACHE_BYTES: 8589934592
+
+jobs:
+  upload:
+    # Forks' pull requests never reach either runner.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    name: "Upload: ${{ matrix.runner }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Describe the runner
+        run: |
+          echo "CPUs: $(nproc)"
+          free -h | sed -n 2p
+          df -h / | sed -n 2p
+
+      # Random bytes, so compression can't make the upload smaller.
+      - name: Write 8 GiB of random data
+        run: |
+          mkdir cache
+          head -c "$CACHE_BYTES" /dev/urandom > cache/data.bin
+          ls -l cache
+
+      - name: Upload the cache
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: cache
+          # One key per attempt, so every re-run uploads again.
+          key: cache-8gib-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+  download:
+    needs: upload
+    name: "Download: ${{ matrix.runner }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Download the cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: cache
+          key: cache-8gib-${{ matrix.runner }}-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Check the size
+        run: |
+          ls -l cache
+          test "$(stat -c %s cache/data.bin)" = "$CACHE_BYTES"
+
+  compare:
+    name: Compare
+    needs: [upload, download]
+    if: ${{ !cancelled() && needs.upload.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Write the comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # GitHub's standard runner has 2 CPUs in a private repository and 4 in a public one.
+          HOSTED_CPUS: ${{ github.event.repository.private && '2' || '4' }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > jobs.json
+          python3 - <<'PYTHON' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          import os
+          from datetime import datetime
+
+          size = int(os.environ["CACHE_BYTES"])
+
+          def seconds(item):
+              if item.get("conclusion") != "success":
+                  return None
+              start = datetime.fromisoformat(item["started_at"].replace("Z", "+00:00"))
+              end = datetime.fromisoformat(item["completed_at"].replace("Z", "+00:00"))
+              return max((end - start).total_seconds(), 1)
+
+          def timing(value):
+              if value is None:
+                  return "–"
+              return f"{int(value // 60)}m {int(value % 60):02d}s ({size / value / 1e6:.0f} MB/s)"
+
+          def cpus(name):
+              return int(os.environ["HOSTED_CPUS"]) if name == "ubuntu-latest" else int(name.split("-")[1].removesuffix("cpu"))
+
+          times = {}
+          for job in json.load(open("jobs.json"))["jobs"]:
+              stage, _, runner = job["name"].partition(": ")
+              if stage not in ("Upload", "Download"):
+                  continue
+              step = next((step for step in job.get("steps", []) if step["name"] == f"{stage} the cache"), {})
+              times.setdefault(runner, {})[stage] = seconds(step)
+
+          runners = sorted(times, key=lambda name: (name != "ubuntu-latest", cpus(name)))
+          print("| Runner | CPUs | Upload 8 GiB | Download 8 GiB |")
+          print("|---|---:|---:|---:|")
+          for name in runners:
+              print(f"| `{name}` | {cpus(name)} | {timing(times[name].get('Upload'))} | {timing(times[name].get('Download'))} |")
+
+          hosted = times.get("ubuntu-latest", {})
+          print()
+          for name in runners:
+              if name == "ubuntu-latest":
+                  continue
+              for stage, verb in (("Upload", "uploaded"), ("Download", "downloaded")):
+                  if hosted.get(stage) and times[name].get(stage):
+                      print(f"- `{name}` {verb} 8 GiB {hosted[stage] / times[name][stage]:.1f}× as fast as `ubuntu-latest` ({cpus(name)} CPUs against {cpus('ubuntu-latest')}).")
+          PYTHON
