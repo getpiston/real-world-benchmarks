@@ -1,0 +1,90 @@
+name: "Diagnostics: memory and swap"
+
+# What each runner gives a job in memory and swap, and what happens when a job asks for more than its RAM.
+on:
+  push:
+    branches: [diagnose-memory]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  memory:
+    name: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, piston-2cpu-ubuntu-2402, piston-4cpu-ubuntu-2402]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Memory and swap settings
+        run: |
+          echo "CPUs: $(nproc)"
+          free -h
+          echo "--- swap areas"
+          swapon --show --bytes || true
+          echo "--- /proc/meminfo"
+          grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree|CommitLimit|Committed_AS):' /proc/meminfo
+          echo "--- kernel settings"
+          for setting in vm.swappiness vm.overcommit_memory vm.overcommit_ratio vm.min_free_kbytes vm.watermark_scale_factor vm.vfs_cache_pressure; do sysctl "$setting" || true; done
+          echo "--- this job's cgroup"
+          cat /proc/self/cgroup
+          for file in memory.max memory.high memory.swap.max; do echo "$file: $(cat /sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup)/$file 2>/dev/null || echo none)"; done
+          echo "--- out-of-memory daemons"
+          for unit in systemd-oomd earlyoom; do echo "$unit: $(systemctl is-active $unit 2>/dev/null || true)"; done
+          echo "--- Node's default heap limit"
+          node -e 'console.log(Math.round(require("v8").getHeapStatistics().heap_size_limit / 1048576) + " MiB")'
+          echo "--- kernel"
+          uname -r
+
+      - name: The runner's processes under memory pressure
+        run: |
+          ps -eo pid,ppid,user,rss,comm --sort=-rss | head -12
+          echo "--- kill priority (oom_score_adj; -1000 is never killed)"
+          for pid in $(pgrep -f 'Runner.Listener|Runner.Worker|runsvc|piston|entrypoint|provisioner|hosted-compute'); do
+            printf '%-7s score=%-5s adj=%-6s %s\n' "$pid" "$(cat /proc/$pid/oom_score 2>/dev/null)" "$(cat /proc/$pid/oom_score_adj 2>/dev/null)" "$(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null | cut -c1-110)"
+          done
+
+      - name: Write the memory filler
+        run: |
+          cat > "$RUNNER_TEMP/fill.py" <<'PYTHON'
+          # Holds RAM plus the given GiB, a GiB at a time with every page written, and logs what swap takes.
+          import sys
+          import time
+
+          def meminfo():
+              values = {}
+              for line in open("/proc/meminfo"):
+                  key, value = line.split(":")
+                  values[key] = int(value.split()[0]) * 1024
+              return values
+
+          gib = 1 << 30
+          info = meminfo()
+          target = info["MemTotal"] + int(sys.argv[1]) * gib
+          print(f"RAM {info['MemTotal'] / gib:.1f} GiB, swap {info['SwapTotal'] / gib:.1f} GiB, asking for {target / gib:.1f} GiB", flush=True)
+          held = []
+          start = time.time()
+          while len(held) * gib < target:
+              block = bytearray(gib)
+              block[::4096] = b"\x01" * (gib // 4096)
+              held.append(block)
+              now = meminfo()
+              used_swap = (now["SwapTotal"] - now["SwapFree"]) / gib
+              print(f"{len(held):3d} GiB held at {time.time() - start:6.1f}s: available {now['MemAvailable'] / gib:5.2f} GiB, swap used {used_swap:5.2f} GiB", flush=True)
+          print(f"Held all {len(held)} GiB in {time.time() - start:.1f}s", flush=True)
+          PYTHON
+
+      - name: Fill memory to 3 GiB past RAM
+        continue-on-error: true
+        run: python3 "$RUNNER_TEMP/fill.py" 3
+
+      - name: Fill memory to 6 GiB past RAM
+        continue-on-error: true
+        run: python3 "$RUNNER_TEMP/fill.py" 6
+
+      - name: What the kernel killed
+        if: always()
+        run: sudo dmesg | grep -iE 'out of memory|oom-kill|killed process' | tail -10 || echo "nothing"
