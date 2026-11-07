@@ -28,15 +28,6 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - name: Describe the runner
-        run: |
-          echo "CPUs: $(nproc)"
-          free -h | sed -n 2p
-          df -h / | sed -n 2p
-          echo "PATH: $PATH"
-          for tool in rustup cargo java node pnpm; do echo "$tool: $(command -v $tool || echo not on PATH)"; done
-          ls -d "$HOME/.cargo/bin" "$HOME/.rustup" /etc/skel/.cargo/bin 2>&1 || true
-
       - name: Check out Bevy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
