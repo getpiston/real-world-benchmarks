@@ -1,4 +1,4 @@
-name: "Rust: Bevy, Piston at 16 CPUs"
+name: "Rust: Bevy, piston-32cpu"
 
 # Bevy's own Linux CI job, `cargo run -p ci -- test`, at a fixed commit, on each runner, built from scratch with no cache.
 on:
@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+        runner: [ubuntu-latest, piston-32cpu-ubuntu-2402]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
