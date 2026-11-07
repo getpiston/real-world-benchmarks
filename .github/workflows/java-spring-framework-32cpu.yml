@@ -1,4 +1,4 @@
-name: "Java: Spring Framework, Piston at 16 CPUs"
+name: "Java: Spring Framework, piston-32cpu"
 
 # Spring Framework's own pull request build, `./gradlew check antora`, at a fixed commit, on both runners, built from
 # scratch: the Java its build action sets up, and no cache of any kind, GitHub's or Gradle's.
@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, piston-16cpu-ubuntu-2402]
+        runner: [ubuntu-latest, piston-32cpu-ubuntu-2402]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
