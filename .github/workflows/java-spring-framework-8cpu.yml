@@ -1,0 +1,98 @@
+name: "Java: Spring Framework, piston-8cpu"
+
+# Spring Framework's own pull request build, `./gradlew check antora`, at a fixed commit, on both runners, built from
+# scratch: the Java its build action sets up, and no cache of any kind, GitHub's or Gradle's.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Forks' pull requests never reach either runner.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    name: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, piston-8cpu-ubuntu-2402]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - name: Check out Spring Framework
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: spring-projects/spring-framework
+          ref: 07c005fc2c004a99c790b59d2e4236ae6027c3ef
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@77dd5b2ce225ea11469928ac317850245a74ae78 # v6.2.0
+        with:
+          distribution: liberica
+          java-version: 25
+
+      # Spring's build action also sets up Gradle with GitHub's cache; its build reads Spring's remote build cache too.
+      - name: Build
+        run: ./gradlew check antora --no-build-cache
+        env:
+          GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.internal.launcher.welcomeMessageEnabled=false
+
+  compare:
+    name: Compare
+    needs: build
+    if: ${{ !cancelled() && needs.build.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Write the comparison
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # GitHub's standard runner has 2 CPUs in a private repository and 4 in a public one.
+          HOSTED_CPUS: ${{ github.event.repository.private && '2' || '4' }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > jobs.json
+          python3 - <<'PYTHON' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from datetime import datetime
+
+          def seconds(item):
+              if not item.get("started_at") or not item.get("completed_at"):
+                  return None
+              start = datetime.fromisoformat(item["started_at"].replace("Z", "+00:00"))
+              end = datetime.fromisoformat(item["completed_at"].replace("Z", "+00:00"))
+              return (end - start).total_seconds()
+
+          def clock(value):
+              return "–" if value is None else f"{int(value // 60)}m {int(value % 60):02d}s"
+
+          jobs = [job for job in json.load(open("jobs.json"))["jobs"] if job["name"] != "Compare"]
+          rows = []
+          for job in jobs:
+              build = next((step for step in job.get("steps", []) if step["name"] == "Build"), {})
+              cache_steps = [step for step in job.get("steps", []) if "cache" in step["name"].lower()]
+              cache = sum(seconds(step) or 0 for step in cache_steps) if cache_steps else None
+              rows.append((job["name"], job["conclusion"], seconds(job), seconds(build), cache))
+
+          import os
+
+          def cpus(name):
+              return int(os.environ["HOSTED_CPUS"]) if name == "ubuntu-latest" else int(name.split("-")[1].removesuffix("cpu"))
+
+          rows.sort(key=lambda row: (row[0] != "ubuntu-latest", cpus(row[0])))
+          print("| Runner | CPUs | Result | Whole job | Build step | Cache steps |")
+          print("|---|---:|---|---:|---:|---:|")
+          for name, conclusion, whole, build, cache in rows:
+              print(f"| `{name}` | {cpus(name)} | {conclusion} | {clock(whole)} | {clock(build)} | {clock(cache)} |")
+          hosted = next((row for row in rows if row[0] == "ubuntu-latest"), None)
+          if hosted and hosted[1] == "success":
+              print()
+              for name, conclusion, whole, _, _ in rows:
+                  if name == "ubuntu-latest" or conclusion != "success":
+                      continue
+                  match = "the same CPUs" if cpus(name) == cpus("ubuntu-latest") else f"{cpus(name)} CPUs against {cpus('ubuntu-latest')}"
+                  print(f"- `{name}` finished the whole job {hosted[2] / whole:.1f}× as fast as `ubuntu-latest` ({match}).")
+          PYTHON
